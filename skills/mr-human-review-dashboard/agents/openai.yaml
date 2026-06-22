@@ -1,4 +1,4 @@
 interface:
   display_name: "MR Human Review Dashboard"
   short_description: "Explain MR diffs as review dashboards"
-  default_prompt: "Use $mr-human-review-dashboard to create a self-contained HTML review dashboard for the current merge request."
+  default_prompt: "Use $mr-human-review-dashboard to create an external self-contained HTML review dashboard for the current merge request and open it in the default browser."

@@ -1,6 +1,6 @@
 # Contributing
 
-This repository stores Codex skills.
+This repository stores agent skills.
 
 ## Skill Guidelines
 
@@ -13,7 +13,7 @@ This repository stores Codex skills.
 
 ## Validation
 
-Before publishing a skill, validate the folder with the Codex skill validator when available:
+Before publishing a skill, validate the folder with the validator for your agent harness when available. For Codex-compatible skill folders, the Codex skill validator can be used:
 
 ```bash
 python3 ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/<skill-name>

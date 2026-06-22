@@ -1,56 +1,190 @@
 ---
 name: mr-human-review-dashboard
-description: Generate a single self-contained HTML dashboard that explains a merge request or pull request for human reviewers. Use when Codex is asked to make an MR or PR diff readable, explain architecture impact, build a reviewer reading order, map review risk, or create mr-human-review.html without changing product code.
+description: Generate a single self-contained HTML dashboard that explains a merge request or pull request for human reviewers. Use when an agent is asked to make an MR or PR diff readable, explain architecture impact, build a reviewer reading order, map review risk, write the report outside the workdir under ~/.ai-reviews/mr-human-review-dashboard, and open it in the user's default browser.
 ---
 
 # MR Human Review Dashboard
 
 ## Purpose
 
-Create one self-contained `mr-human-review.html` file that makes the current merge request or pull request understandable for a human reviewer.
+Create one self-contained HTML file that makes the current merge request or pull request understandable for a human reviewer.
 
 Do not explain files alphabetically or by raw diff order. Build a human reading path: intent, architecture surfaces, first files to inspect, mechanical fallout, and review risks.
 
 ## Ground Rules
 
-- Work in the current repository.
-- Do not modify product code, tests, schemas, generated app assets, or project configuration.
-- The only intended write is `mr-human-review.html`.
+- Work from the current repository, but do not write the report into the repository.
+- Do not modify product code, tests, schemas, generated app assets, project configuration, or repository files.
+- The only intended write is the generated HTML file reserved by the bundled helper script in `prepare` mode.
+- Write reports under `~/.ai-reviews/mr-human-review-dashboard/<repo-slug>/`.
+- Generate a new report for every run. Never overwrite an existing report.
 - Separate repository facts from agent interpretation.
 - Do not invent motivation. When intent is not explicit in commits, docs, branch names, or code, label it as `inferred`.
 - Prefer concrete file paths, functions, classes, types, commands, and contracts over general commentary.
 - Avoid full diff dumps. Include only short, relevant hunks or code excerpts.
+- Keep local repository paths as plain text in the HTML. Do not create `file://` links or relative links to workdir files.
 
-## Context Gathering
+## Required Workflow
 
 1. Read local agent and project guidance when present: `AGENTS.md`, `CLAUDE.md`, `README`, `CONTRIBUTING`, architecture docs, design docs, and relevant testing docs.
-2. Determine the base branch for the MR or PR. If the target is unclear, try `origin/main` first, then `main`.
-3. Inspect the diff with:
+2. Resolve the bundled helper script to an absolute path from this installed skill folder. Keep the current working directory in the repository being reviewed. Do not `cd` into the skill folder to run the helper.
 
 ```bash
-git diff --stat <base>...HEAD
-git diff --name-status <base>...HEAD
-git diff --find-renames <base>...HEAD
-git diff <base>...HEAD
+HELPER="/absolute/path/to/mr-human-review-dashboard/scripts/prepare-review-output.sh"
 ```
 
-4. Read relevant architecture, design, and testing documentation selectively. Do not load unrelated documentation.
-5. Read the most important changed code files and tests in full enough to understand behavior. Do not rely only on the diff.
-6. Distinguish real behavior changes from mechanical, generated, formatting, dependency, or rename-only changes.
+3. Run the helper before inspecting the diff in depth:
 
-## Required Output
+```bash
+"$HELPER" prepare
+```
 
-Create `mr-human-review.html` in the current repository.
+If the harness or model is certainly known from the current runtime, pass it explicitly:
+
+```bash
+"$HELPER" prepare --harness "Codex" --model "GPT-5"
+```
+
+Do not guess harness or model. If they are not certainly known, omit the arguments; the script will emit `unknown`.
+
+4. Parse the `KEY='VALUE'` lines as text. Do not `eval` or source this output. Use the emitted values for all later steps, especially:
+
+- `BASE_REF`
+- `BASE_SHA`
+- `CURRENT_BRANCH`
+- `HEAD_SHA`
+- `REPO_ROOT`
+- `REPO_SLUG`
+- `REVIEW_TITLE`
+- `REVIEW_KIND`
+- `REVIEW_NUMBER`
+- `REVIEW_URL`
+- `PLATFORM`
+- `OUTPUT_PATH`
+- `OUTPUT_DIR`
+- `CREATED_AT`
+- `HARNESS`
+- `MODEL`
+
+5. If `prepare` reports multiple PR/MR candidates, ask the user which review to use, then rerun with the selected number or URL:
+
+```bash
+"$HELPER" prepare --review 123
+```
+
+6. Use the emitted `BASE_REF` for every diff command. Do not recompute or substitute the base branch later.
+
+7. Inspect the diff with:
+
+```bash
+git diff --stat "$BASE_REF"...HEAD
+git diff --name-status "$BASE_REF"...HEAD
+git diff --find-renames "$BASE_REF"...HEAD
+git diff "$BASE_REF"...HEAD
+```
+
+The prepare script aborts if the current directory is not inside a Git repository, no base can be resolved, or the diff is empty.
+
+8. Read relevant architecture, design, and testing documentation selectively. Do not load unrelated documentation.
+9. Read the most important changed code files and tests in full enough to understand behavior. Do not rely only on the diff.
+10. Distinguish real behavior changes from mechanical, generated, formatting, dependency, or rename-only changes.
+11. Write the final self-contained HTML to exactly `OUTPUT_PATH`. The path has already been atomically reserved; overwrite only that reserved file with the finished report.
+12. After writing a non-empty HTML file, open it best-effort:
+
+```bash
+"$HELPER" open "$OUTPUT_PATH"
+```
+
+Browser opening is best-effort. If opening fails, still finish successfully and provide the report path.
+
+13. Final chat response must be a short English sentence with the absolute path:
+
+```text
+Review: /absolute/path/to/report.html
+```
+
+## Output Naming
+
+Reports are written to:
+
+```text
+~/.ai-reviews/mr-human-review-dashboard/<repo-slug>/<review-slug>-<timestamp>.html
+```
+
+The helper script derives:
+
+- `<repo-slug>` from `owner/repo` remote path when available, otherwise the local repository directory name.
+- `<review-slug>` from PR/MR title, otherwise branch name, otherwise short commit subject, otherwise `review`.
+- `pr-<number>-...` for GitHub pull requests when the number is known.
+- `mr-<number>-...` for GitLab merge requests when the number is known.
+- Timestamp from local time in `YYYY-MM-DD-HHMMSS` format.
+
+Slug rules:
+
+- Lowercase.
+- ASCII transliteration where available.
+- Replace non-alphanumeric runs with `-`.
+- Trim leading and trailing `-`.
+- Limit review slug to 80 characters.
+- Limit repository slug to 120 characters.
+
+If a filename collides, the helper script appends `-2`, `-3`, and so on. It reserves the final path with an empty file before returning it.
+
+## Required HTML Properties
 
 The file must be:
 
 - A single self-contained HTML document with embedded CSS and minimal JavaScript.
 - Directly readable in a browser with no build step.
+- Fully offline: no external assets, fonts, scripts, stylesheets, CDN resources, or network dependencies.
 - Responsive and usable on desktop and mobile.
 - A quiet review dashboard, not a marketing page.
 - Structured with semantic sections, cards, badges, and collapsible details.
 
-Do not use external assets, external scripts, external stylesheets, or large complete diffs.
+Do not use external assets, external scripts, external stylesheets, relative links to workdir files, `file://` links, or large complete diffs.
+
+## Metadata
+
+Show these values visibly in the header when available:
+
+- Local repository path.
+- Absolute output path.
+- Platform.
+- Review kind and number.
+- Base ref and short base SHA.
+- Current branch and short head SHA.
+- Harness.
+- Model.
+
+If harness or model is `unknown`, explain in the HTML that `unknown` means `not available to the agent runtime`.
+
+Also include a machine-readable metadata block:
+
+```html
+<script type="application/json" id="review-metadata">
+{
+  "generator": "mr-human-review-dashboard",
+  "harness": "unknown",
+  "model": "unknown",
+  "unknownMeaning": "not available to the agent runtime",
+  "repoRoot": "...",
+  "repoSlug": "...",
+  "baseRef": "...",
+  "baseSha": "...",
+  "currentBranch": "...",
+  "headSha": "...",
+  "platform": "...",
+  "reviewKind": "...",
+  "reviewNumber": "...",
+  "reviewTitle": "...",
+  "reviewUrl": "...",
+  "outputPath": "...",
+  "createdAt": "YYYY-MM-DD-HHMMSS"
+}
+</script>
+```
+
+Use full SHAs in JSON and shortened SHAs in visible UI.
 
 ## Agent Annotation Toggle
 
@@ -72,9 +206,13 @@ The toggle must:
 
 Include:
 
-- MR or PR title, derived from branch or commits if no explicit title is available.
-- Base branch.
-- Current branch.
+- MR or PR title, derived from PR/MR metadata, branch, or commits if no explicit title is available.
+- Base branch and short base SHA.
+- Current branch and short head SHA.
+- Platform and PR/MR number when known.
+- Local repository path.
+- Absolute output path.
+- Harness and model.
 - Number of changed files.
 - Added and deleted line counts.
 - One short answer to: what is this MR or PR about?
