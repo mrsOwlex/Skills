@@ -1,0 +1,16 @@
+.DS_Store
+.idea/
+.vscode/
+
+*.log
+*.tmp
+*.swp
+
+node_modules/
+dist/
+build/
+.cache/
+.pytest_cache/
+__pycache__/
+
+mr-human-review.html
