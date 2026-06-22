@@ -7,6 +7,7 @@ A public collection of tool-neutral agent skills.
 | Skill | Purpose |
 | --- | --- |
 | [`mr-human-review-dashboard`](skills/mr-human-review-dashboard/SKILL.md) | Generates a self-contained HTML dashboard that explains a merge request or pull request for human reviewers. |
+| [`xquik-x-data`](skills/xquik-x-data/SKILL.md) | Guides Codex through Xquik MCP setup, REST API integration, monitors, webhooks, and public X data workflows. |
 
 ## Installation
 
@@ -41,6 +42,9 @@ skills/
     SKILL.md
     agents/openai.yaml
     scripts/prepare-review-output.sh
+  xquik-x-data/
+    SKILL.md
+    agents/openai.yaml
 ```
 
 Each skill folder is kept focused on agent-facing instructions and optional bundled resources. Human-facing project documentation lives at the repository root.

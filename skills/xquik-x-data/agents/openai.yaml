@@ -1,0 +1,4 @@
+interface:
+  display_name: "Xquik X Data"
+  short_description: "Use Xquik for X data and MCP workflows"
+  default_prompt: "Use $xquik-x-data to connect an agent to Xquik or build a public X data workflow."
