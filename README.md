@@ -40,6 +40,7 @@ skills/
   mr-human-review-dashboard/
     SKILL.md
     agents/openai.yaml
+    assets/template.html
     scripts/prepare-review-output.sh
 ```
 

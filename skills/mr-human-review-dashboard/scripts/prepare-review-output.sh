@@ -79,12 +79,85 @@ remote_path() {
   printf "%s" "$path"
 }
 
-remote_platform() {
+# Extract just the host from a git remote URL (no scheme, userinfo, port, or path).
+remote_host() {
   url=$1
-  case "$url" in
-    *github.com*) printf "github" ;;
-    *gitlab.com*) printf "gitlab" ;;
+  clean=$(printf "%s" "$url" | sed 's/[.]git$//')
+  case "$clean" in
+    *://*)
+      rest=${clean#*://}
+      rest=${rest##*@}
+      host=${rest%%/*}
+      host=${host%%:*}
+      ;;
+    *@*:*)
+      hostpath=${clean##*@}
+      host=${hostpath%%:*}
+      ;;
+    *)
+      host=
+      ;;
+  esac
+  printf "%s" "$host"
+}
+
+remote_platform() {
+  host=$(remote_host "$1")
+  case "$host" in
+    github.com) printf "github" ;;
+    gitlab.com) printf "gitlab" ;;
+    # Self-hosted instances usually carry the product name in the HOST
+    # (e.g. gitlab.relaxdays.de, github.mycorp.com). Match host only — never the
+    # project path — so gitlab.corp.com:github/mirror is still detected as gitlab.
+    *github*) printf "github" ;;
+    *gitlab*) printf "gitlab" ;;
     *) printf "" ;;
+  esac
+}
+
+# Convert a git remote URL into its https web base, e.g.
+#   git@gitlab.relaxdays.de:grp/proj.git    -> https://gitlab.relaxdays.de/grp/proj
+#   ssh://git@host:22/grp/proj.git          -> https://host/grp/proj
+#   https://host/grp/proj.git               -> https://host/grp/proj
+# Used to build file-level blob links in the dashboard.
+remote_web_url() {
+  url=$1
+  clean=$(printf "%s" "$url" | sed 's/[.]git$//')
+
+  case "$clean" in
+    ssh://git@*)
+      rest=${clean#ssh://git@}
+      host=${rest%%/*}
+      host=${host%%:*}
+      path=${rest#*/}
+      printf "https://%s/%s" "$host" "$path"
+      ;;
+    git@*:*)
+      hostpath=${clean#git@}
+      host=${hostpath%%:*}
+      path=${hostpath#*:}
+      printf "https://%s/%s" "$host" "$path"
+      ;;
+    http://*|https://*)
+      rest=${clean#*://}
+      hostpart=${rest%%/*}
+      pathpart=${rest#*/}
+      # Drop any user[:password]@ userinfo so tokens are never emitted/shared.
+      # Strip through the LAST @ in case the credential itself contains one.
+      case "$hostpart" in
+        *@*) hostpart=${hostpart##*@} ;;
+      esac
+      if [ "$pathpart" = "$rest" ]; then
+        printf "https://%s" "$hostpart"
+      else
+        printf "https://%s/%s" "$hostpart" "$pathpart"
+      fi
+      ;;
+    *)
+      # Local paths, file://, git://, and other non-web remotes have no blob URL.
+      # Emit nothing so the dashboard renders plain-text paths instead of broken links.
+      printf ""
+      ;;
   esac
 }
 
@@ -208,9 +281,13 @@ glab_review_info() {
   else
     if [ -n "$branch" ] && [ "$branch" != "HEAD" ]; then
       list_json=$(glab mr list --source-branch "$branch" --state opened --output json 2>/dev/null || true)
-      count=$(printf "%s" "$list_json" | grep -o '"iid"[[:space:]]*:' | wc -l | tr -d ' ')
-      if [ "$count" -eq 0 ]; then
-        count=$(printf "%s" "$list_json" | grep -o '"id"[[:space:]]*:' | wc -l | tr -d ' ')
+      if command -v jq >/dev/null 2>&1; then
+        count=$(printf "%s" "$list_json" | jq 'if type=="array" then length else 1 end' 2>/dev/null || printf "0")
+      else
+        count=$(printf "%s" "$list_json" | grep -o '"iid"[[:space:]]*:' | wc -l | tr -d ' ')
+        if [ "$count" -eq 0 ]; then
+          count=$(printf "%s" "$list_json" | grep -o '"id"[[:space:]]*:' | wc -l | tr -d ' ')
+        fi
       fi
 
       if [ "$count" -gt 1 ]; then
@@ -230,18 +307,30 @@ glab_review_info() {
 
   [ -n "$json" ] || return 1
 
-  number=$(printf "%s" "$json" | json_number_value iid)
-  if [ -z "$number" ]; then
-    number=$(printf "%s" "$json" | json_number_value id)
-  fi
-  title=$(printf "%s" "$json" | json_string_value title)
-  url=$(printf "%s" "$json" | json_string_value web_url)
-  if [ -z "$url" ]; then
-    url=$(printf "%s" "$json" | json_string_value webUrl)
-  fi
-  base=$(printf "%s" "$json" | json_string_value target_branch)
-  if [ -z "$base" ]; then
-    base=$(printf "%s" "$json" | json_string_value targetBranch)
+  if command -v jq >/dev/null 2>&1; then
+    # Robust path. Normalize first: `glab mr list` yields an array, `glab mr view`
+    # an object. Read only top-level fields so nested ids/urls (author, pipeline)
+    # cannot be picked up by accident.
+    obj='if type=="array" then .[0] else . end'
+    number=$(printf "%s" "$json" | jq -r "($obj) | (.iid // .id // empty)" 2>/dev/null)
+    title=$(printf "%s" "$json" | jq -r "($obj) | (.title // empty)" 2>/dev/null)
+    url=$(printf "%s" "$json" | jq -r "($obj) | (.web_url // .webUrl // empty)" 2>/dev/null)
+    base=$(printf "%s" "$json" | jq -r "($obj) | (.target_branch // .targetBranch // empty)" 2>/dev/null)
+  else
+    # Best-effort fallback when jq is unavailable (less robust on nested JSON).
+    number=$(printf "%s" "$json" | json_number_value iid)
+    if [ -z "$number" ]; then
+      number=$(printf "%s" "$json" | json_number_value id)
+    fi
+    title=$(printf "%s" "$json" | json_string_value title)
+    url=$(printf "%s" "$json" | json_string_value web_url)
+    if [ -z "$url" ]; then
+      url=$(printf "%s" "$json" | json_string_value webUrl)
+    fi
+    base=$(printf "%s" "$json" | json_string_value target_branch)
+    if [ -z "$base" ]; then
+      base=$(printf "%s" "$json" | json_string_value targetBranch)
+    fi
   fi
 
   [ -n "$number$title$url$base" ] || return 1
@@ -336,8 +425,10 @@ prepare() {
 
   if [ -n "$REMOTE_URL" ]; then
     raw_repo=$(remote_path "$REMOTE_URL")
+    REPO_WEB_URL=$(remote_web_url "$REMOTE_URL")
   else
     raw_repo=${REPO_ROOT##*/}
+    REPO_WEB_URL=
   fi
   REPO_SLUG=$(slugify "$raw_repo" 120 "repo")
 
@@ -452,6 +543,7 @@ prepare() {
   emit HEAD_SHA "$HEAD_SHA"
   emit REPO_ROOT "$REPO_ROOT"
   emit REPO_SLUG "$REPO_SLUG"
+  emit REPO_WEB_URL "$REPO_WEB_URL"
   emit REVIEW_TITLE "$REVIEW_TITLE"
   emit REVIEW_KIND "$REVIEW_KIND"
   emit REVIEW_NUMBER "$REVIEW_NUMBER"

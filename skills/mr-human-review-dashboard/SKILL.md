@@ -21,8 +21,8 @@ Do not explain files alphabetically or by raw diff order. Build a human reading 
 - Separate repository facts from agent interpretation.
 - Do not invent motivation. When intent is not explicit in commits, docs, branch names, or code, label it as `inferred`.
 - Prefer concrete file paths, functions, classes, types, commands, and contracts over general commentary.
-- Avoid full diff dumps. Include only short, relevant hunks or code excerpts.
-- Keep local repository paths as plain text in the HTML. Do not create `file://` links or relative links to workdir files.
+- Embed every changed file's full diff exactly once, but keep it out of the calm surface: each diff lives inside a collapsible `<details>` — either attached to its reading-order step, or grouped in the collapsed "Agent-verified" section. Generate each diff block with the bundled helper (see below) and embed its output verbatim. Never hand-transcribe, summarize, abbreviate, stub, or replace diff lines with `…`/comment placeholders — this applies to ALL files including tests, generated files, and `.csproj` version bumps. All `<details>` holding a diff are collapsed by default to keep the surface calm; signal priority with the risk badge, not by auto-expanding.
+- Link source files to their blob at the head commit using `REPO_WEB_URL` and `HEAD_SHA` (see "Source Links"). Keep local repository paths as plain text. Do not create `file://` links or relative links to workdir files.
 
 ## Required Workflow
 
@@ -55,6 +55,7 @@ Do not guess harness or model. If they are not certainly known, omit the argumen
 - `HEAD_SHA`
 - `REPO_ROOT`
 - `REPO_SLUG`
+- `REPO_WEB_URL`
 - `REVIEW_TITLE`
 - `REVIEW_KIND`
 - `REVIEW_NUMBER`
@@ -88,7 +89,22 @@ The prepare script aborts if the current directory is not inside a Git repositor
 8. Read relevant architecture, design, and testing documentation selectively. Do not load unrelated documentation.
 9. Read the most important changed code files and tests in full enough to understand behavior. Do not rely only on the diff.
 10. Distinguish real behavior changes from mechanical, generated, formatting, dependency, or rename-only changes.
-11. Write the final self-contained HTML to exactly `OUTPUT_PATH`. The path has already been atomically reserved; overwrite only that reserved file with the finished report.
+11. Build the report from the bundled template. Read `assets/template.html` from this installed skill folder and use it as the scaffold:
+
+```bash
+TEMPLATE="/absolute/path/to/mr-human-review-dashboard/assets/template.html"
+RENDER_DIFF="/absolute/path/to/mr-human-review-dashboard/scripts/render-diff.sh"
+```
+
+For each changed file, produce its diff block by running `"$RENDER_DIFF" "$BASE_REF" "<path>"` and pasting the emitted `<pre class="diff">…</pre>` verbatim into that file's `<details>`. This guarantees the complete, correctly escaped diff — do not edit or shorten it.
+
+- Keep the `<style>` and `<script>` blocks verbatim. They carry the high-contrast theme and the localStorage persistence for the annotation toggle, the reviewer checklist, and collapsible state. Do not reimplement persistence by hand.
+- Replace every `{{PLACEHOLDER}}` with real values from `prepare` output and the diff.
+- Replicate the marked example blocks (reading-order steps, file rows, diff `<details>`, design-note groups, checklist items, mechanical files) once per real item, then delete any leftover example/placeholder markup.
+- Replace every placeholder with a value from `prepare` output, the diff, or platform metadata. A few header bits are optional (`{{AUTHOR}}`, `{{STATE}}`, `{{TICKET_OR_EPIC}}`): when the platform CLI does not provide them, delete that element rather than leave a placeholder. Derive from `REVIEW_KIND` (`merge_request` | `pull_request`): `{{REVIEW_KIND_TITLE}}` (`Merge Request` | `Pull Request`), `{{REVIEW_KIND_SHORT}}` (`MR` | `PR`), and `{{REVIEW_NUMBER_PREFIX}}` (`!` for GitLab, `#` for GitHub). `{{FILE_URL}}` is computed per "Source Links".
+
+No-review fallback: `prepare` can succeed with empty `REVIEW_KIND`, `REVIEW_NUMBER`, and `REVIEW_URL` (no PR/MR found — e.g. reviewing a local branch before opening one). In that case use a neutral kicker (`Branch Review · Human Review Dashboard`), delete the MR/PR link, number, and `Platform / kind` value from the header, and orient the reader with the branch name and head SHA instead. Source links still work from `REPO_WEB_URL` + `HEAD_SHA`.
+- Write the finished, fully self-contained HTML to exactly `OUTPUT_PATH`. The path has already been atomically reserved; overwrite only that reserved file. The result must contain no `{{...}}` markers and no `<!-- EXAMPLE -->` / `<!-- REPEAT -->` / scaffold comments.
 12. After writing a non-empty HTML file, open it best-effort:
 
 ```bash
@@ -141,207 +157,119 @@ The file must be:
 - A quiet review dashboard, not a marketing page.
 - Structured with semantic sections, cards, badges, and collapsible details.
 
-Do not use external assets, external scripts, external stylesheets, relative links to workdir files, `file://` links, or large complete diffs.
+Do not use external assets, external scripts, external stylesheets, relative links to workdir files, or `file://` links. Full per-file diffs are allowed and expected, but only inside collapsible `<details>` so the default surface stays calm.
+
+Readability and contrast are part of the bar: the bundled theme targets WCAG AA on the dark background. Do not lower text contrast, do not introduce faint gray body copy, and keep body text at the template's size or larger. Diff lines must stay legible (added/removed tinted, context still readable).
 
 ## Metadata
 
-Show these values visibly in the header when available:
+The header stays slim. Show only review-relevant facts at the top:
 
-- Local repository path.
-- Absolute output path.
-- Platform.
-- Review kind and number.
-- Base ref and short base SHA.
-- Current branch and short head SHA.
-- Harness.
-- Model.
+- MR or PR title.
+- Ticket or epic tag and the MR/PR link.
+- One short answer to: what is this about?
+- Number of changed files, insertions, deletions, and at most a few review-relevant counts (e.g. new core files, DB migrations).
+
+Move run/provenance metadata into a collapsed `Run details` disclosure (already in the template): harness, model, base ref and short base SHA, current branch and short head SHA, platform, local repository path, absolute output path. Reviewers should not have to look at agent/harness, commit SHAs, or repo paths to start reviewing.
 
 If harness or model is `unknown`, explain in the HTML that `unknown` means `not available to the agent runtime`.
 
-Also include a machine-readable metadata block:
+The machine-readable metadata block lives in the template (`<script id="review-metadata">`); fill its placeholders, including `repoWebUrl`. Use full SHAs in JSON and shortened SHAs in visible UI.
 
-```html
-<script type="application/json" id="review-metadata">
-{
-  "generator": "mr-human-review-dashboard",
-  "harness": "unknown",
-  "model": "unknown",
-  "unknownMeaning": "not available to the agent runtime",
-  "repoRoot": "...",
-  "repoSlug": "...",
-  "baseRef": "...",
-  "baseSha": "...",
-  "currentBranch": "...",
-  "headSha": "...",
-  "platform": "...",
-  "reviewKind": "...",
-  "reviewNumber": "...",
-  "reviewTitle": "...",
-  "reviewUrl": "...",
-  "outputPath": "...",
-  "createdAt": "YYYY-MM-DD-HHMMSS"
-}
-</script>
-```
+**Escape every substituted value**, not just diffs. Prepare-sourced text (especially `reviewTitle`) can contain characters that break the page:
 
-Use full SHAs in JSON and shortened SHAs in visible UI.
+- Inside the `review-metadata` JSON, JSON-escape values: escape `\` and `"`, and escape every `<` as the six-character JSON unicode escape (backslash, lowercase u, 0, 0, 3, c) so a title containing `</script>` cannot close the script tag.
+- In visible HTML, HTML-escape `&`, `<`, `>` in text and also `"` inside attribute values.
+
+A malformed title must never break the metadata block or break out of the script tag.
+
+## Source Links
+
+Make changed-file references clickable. Build a file-level blob link to the head commit from `REPO_WEB_URL` and `HEAD_SHA`:
+
+- GitLab: `REPO_WEB_URL/-/blob/HEAD_SHA/PATH`
+- GitHub: `REPO_WEB_URL/blob/HEAD_SHA/PATH`
+
+Use the full `HEAD_SHA` so links stay stable. File-level links (no line anchor) are the default; only add a `#L<n>` anchor when you are confident of the line.
+
+Per status:
+
+- `NEW`, `MOD`, `RENAMED`: link the (new) path at `HEAD_SHA`.
+- `DEL`: the file is gone at the head commit, so a `HEAD_SHA` link 404s. Link the old path at `BASE_SHA` instead (`.../blob/BASE_SHA/OLD_PATH`), or render it as plain text.
+
+If `REPO_WEB_URL` is empty, or `PLATFORM` is neither `gitlab` nor `github` (so the blob path is unknown), render every path as plain text instead of a broken link.
 
 ## Agent Annotation Toggle
 
-Add a visible toggle near the top labeled `Show agent annotations`.
+The template provides a visible toggle near the top labeled `Show agent annotations`, plus the persistence wiring. Your job is to mark content, not to rebuild the toggle.
 
-All interpretive review comments, risks, recommendations, and review questions from the agent must be marked with the CSS class `.agent-annotation`.
-
-Facts from git, code, tests, and documentation must remain visible even when annotations are hidden.
-
-The toggle must:
-
-- Hide `.agent-annotation` elements when off.
-- Show `.agent-annotation` elements when on.
-- Persist its state with `localStorage`.
+- Mark all interpretive review comments, risks, recommendations, and review questions with the CSS class `.agent-annotation`.
+- Facts from git, code, tests, and documentation must remain visible even when annotations are hidden.
+- The toggle hides/shows `.agent-annotation` and persists in `localStorage`. The reviewer checklist and collapsible `<details data-key>` states also persist — this is handled by the template's `<script>` block, which you keep verbatim.
 
 ## Content Structure
 
-### 1. Header
+The **Human Reading Order is the spine** of the dashboard. Do not build separate, parallel sections for risk, file tour, change story, and test plan that repeat the same files in a different order. Fold them into the reading order (risk as inline badges, per-file diffs as expandable detail) so a human walks one path. Tests and mechanical fallout move out of the spine entirely.
 
-Include:
+The section order is fixed by the template:
 
-- MR or PR title, derived from PR/MR metadata, branch, or commits if no explicit title is available.
-- Base branch and short base SHA.
-- Current branch and short head SHA.
-- Platform and PR/MR number when known.
-- Local repository path.
-- Absolute output path.
-- Harness and model.
-- Number of changed files.
-- Added and deleted line counts.
-- One short answer to: what is this MR or PR about?
+### 1. Header (slim)
+
+See "Metadata". Visible: title, ticket/epic tag, MR/PR link, what-it's-about, change counts. Everything else (harness, model, SHAs, paths) goes in the collapsed `Run details` disclosure.
 
 ### 2. TL;DR
 
-Write 2 to 4 sentences:
+2 to 4 sentences:
 
 - What changes functionally?
 - What architecture decision or direction is visible?
 - What must a reviewer understand before reviewing details?
 
-### 3. Human Reading Order
+### 3. Architecture Context
 
-Create a prioritized reading order based on how a human should understand the change, not on filenames.
+Explain the change in the existing system context. Derive relevant surfaces from repository documentation, module structure, and the diff (request/event flow, data flow, ownership boundaries, runtime processes, persistence, UI/API contracts, background jobs, external integrations).
 
-Use categories as appropriate:
+Include one small diagram using the template's HTML/CSS flow blocks (or inline SVG) showing one of: before/after structure, changed runtime flow, or affected module boundaries. This section is high-value — keep it.
 
-- Entry points
-- Core domain flow
-- Persistence, schema, or migrations
-- API or UI boundary
-- Integrations
-- Tests
-- Mechanical fallout
+### 4. Human Reading Order (the spine)
 
-For every step, include:
+A prioritized path based on how a human should understand the change, not on filenames. Aim for roughly 3 to 6 steps. Categories as appropriate: entry points, core domain flow, persistence/schema/migrations, API or UI boundary, integrations.
 
-- Why to start there.
-- Which files to read.
-- What the reviewer should check.
+Do **not** add "Tests" or "Mechanical fallout" steps here — those belong in the collapsed "Agent-verified" section.
 
-### 4. Architecture Context
+For every step include:
 
-Explain the change in the existing system context. Derive relevant architecture surfaces from repository documentation, module structure, and the diff.
+- A category label and, when it carries review risk, an inline risk badge (`attention`, `medium`, or `safe`) on the step. This replaces a standalone Risk Map — risk lives where the reading happens.
+- Why to start/continue there and what it does.
+- The files to read, each as a clickable source link (see "Source Links"), with a one-line note and a status badge (`new`, `mod`, `del`, `renamed`).
+- One concrete thing the reviewer should check, marked `.agent-annotation`.
+- A per-file `<details class="file">` carrying the **full diff** for each file in the step (this is the former "File Tour", now attached to the step it belongs to), produced by `render-diff.sh`. Keep all diff `<details>` collapsed by default to stay calm; the `attention`/`medium`/`safe` badge signals priority. Give each `<details>` a stable `data-key` so its state persists.
 
-Consider:
+Keep the steps themselves prägnant — heavy content lives behind the collapsibles, not in the step summary.
 
-- Request or event flow
-- Data flow
-- Ownership boundaries
-- Runtime processes
-- Persistence
-- UI or API contracts
-- Background jobs
-- External integrations
+### 5. Design / Architecture Notes
 
-Include one small diagram using HTML/CSS or inline SVG. The diagram should show one of:
+Group decisions by theme instead of a flat bullet dump (the template provides the groups):
 
-- Before and after structure.
-- Changed runtime flow.
-- Affected module boundaries.
+- Coupling introduced or removed.
+- Invariants that must still hold.
+- Alternatives apparently not chosen (mark `inferred` when derived only from the diff).
 
-### 5. Change Story
+Keep it tight and organized; avoid a long list of unrelated bullets.
 
-Explain the change as a sequence:
+### 6. Reviewer Checklist
 
-- What happened before?
-- What happens after?
-- Which new data, types, or contracts appear?
-- Which old assumptions are removed?
+A short checkbox list for the human reviewer. Each item gets a stable `data-check` id so progress survives reloads (template-handled). Tailor items to this MR (architecture understood, risky files reviewed, public contracts reviewed, runtime/migration/rollback questions resolved).
 
-### 6. Risk Map
+### 7. Agent-verified (collapsed)
 
-Group changed files into three levels:
-
-- `ATTENTION`: High review priority. Behavior, persistence, concurrency, security, runtime, migrations, or rollback risk.
-- `MEDIUM`: Logic, API contracts, tests, or UI behavior.
-- `SAFE`: Types, docs, mechanical renames, formatting, or pure callsite updates.
-
-For every risky file, include:
-
-- Risk in one sentence.
-- Concrete review question.
-- Relevant functions, classes, or types.
-
-Mark risk explanations and review questions as `.agent-annotation`.
-
-### 7. File Tour
-
-Create collapsible cards for each changed file or file group.
-
-Each card must include:
-
-- Path.
-- Status: `NEW`, `MOD`, `DEL`, or `RENAMED`.
-- Risk badge.
-- Why this change exists.
-- What to check.
-- At most 1 to 3 important code or diff excerpts.
-
-High-risk cards should be open by default. Safe cards should be collapsed by default.
-
-Mark interpretive guidance as `.agent-annotation`.
-
-### 8. Design / Architecture Notes
-
-List the most important design decisions:
-
-- Which coupling is introduced or removed?
-- Which ownership boundary shifts?
-- Which invariants must still hold?
-- Which alternatives does the MR or PR appear not to choose?
-
-When something is derived only from the diff, write `inferred`.
-
-### 9. Test & Verification Plan
-
-Include:
-
-- Existing tests that cover the change.
-- Tests that may be missing.
-- Useful manual checks.
-- Concrete commands found in `package.json`, `Makefile`, `README`, CI configuration, or equivalent project files.
-
-### 10. Reviewer Checklist
-
-End with a short checkbox list:
-
-- Architecture understood.
-- Risky files reviewed.
-- Public contracts reviewed.
-- Tests reviewed.
-- Runtime, migration, and rollback questions resolved.
+A single collapsed `<details>` at the bottom for what an agent verifies more efficiently than a human: tests, mechanical/generated changes, version bumps, changelog edits. Each file here is a nested collapsed `<details>` with a linked path and its **complete** diff from `render-diff.sh` — the same standard as the spine. Do not reduce test files to method-name stubs and do not replace `.csproj`/`.props`/changelog diffs with synthetic one-line summaries. This keeps every diff present and complete without adding noise to the human path.
 
 ## Quality Bar
 
 - Write for a reviewer who wants to understand the MR or PR quickly but correctly.
-- Keep the dashboard calm, dense, and scannable.
-- Make facts and interpretation visually distinguishable.
-- Keep code excerpts short and purposeful.
-- Ensure the HTML works when opened directly in a browser.
+- Keep the dashboard calm, scannable, and low-noise. The spine should fit a quick scan; depth hides behind collapsibles.
+- Make facts and interpretation visually distinguishable; keep interpretive content behind `.agent-annotation`.
+- Prioritize readability and contrast (WCAG AA on the dark theme); never introduce faint, low-contrast text.
+- Every changed file's diff is present exactly once, HTML-escaped, inside a collapsible.
+- No leftover `{{placeholders}}` or example/REPEAT comments. The HTML works when opened directly in a browser, fully offline.

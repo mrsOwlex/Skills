@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<!--
+  mr-human-review-dashboard — TEMPLATE SCAFFOLD
+  =============================================
+  This is a working, self-contained skeleton. The agent COPIES this file to the
+  reserved OUTPUT_PATH and replaces the {{PLACEHOLDERS}} and the example markup
+  inside the marked blocks.
+  Keep VERBATIM: the <style> block and the bottom persistence <script> (annotation
+  toggle, reviewer checklist, collapsible state) — do not edit their CSS/JS.
+  NOT verbatim: the <script type="application/json" id="review-metadata"> block still
+  has {{placeholders}} to replace (and JSON-escape per SKILL.md "Escaping").
+
+  Replace-me markers (described in words; do not write nested HTML comment delimiters here):
+    {{LIKE_THIS}}            a single value to substitute
+    REPEAT comments          (the "REPEAT" notes in the body) duplicate the enclosing element per item
+    EXAMPLE blocks           representative markup; mirror its shape, then remove the note
+
+  Hard rules (see SKILL.md):
+    - No external assets, fonts, scripts, stylesheets, CDNs, or network calls.
+    - HTML-escape ALL code/diff content (& < >).
+    - Every changed file's diff appears exactly once: in its reading-order step
+      detail, or in the collapsed "Agent-verified" group at the bottom.
+    - {{FILE_URL}} is a file-level blob link you compute per SKILL.md "Source Links":
+      GitLab REPO_WEB_URL/-/blob/HEAD_SHA/PATH · GitHub REPO_WEB_URL/blob/HEAD_SHA/PATH.
+      If REPO_WEB_URL is empty, render the path as plain text (no <a>).
+-->
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{DOC_TITLE}}</title>
+
+<script type="application/json" id="review-metadata">
+{
+  "generator": "mr-human-review-dashboard",
+  "harness": "{{HARNESS}}",
+  "model": "{{MODEL}}",
+  "unknownMeaning": "not available to the agent runtime",
+  "repoRoot": "{{REPO_ROOT}}",
+  "repoSlug": "{{REPO_SLUG}}",
+  "repoWebUrl": "{{REPO_WEB_URL}}",
+  "baseRef": "{{BASE_REF}}",
+  "baseSha": "{{BASE_SHA_FULL}}",
+  "currentBranch": "{{CURRENT_BRANCH}}",
+  "headSha": "{{HEAD_SHA_FULL}}",
+  "platform": "{{PLATFORM}}",
+  "reviewKind": "{{REVIEW_KIND}}",
+  "reviewNumber": "{{REVIEW_NUMBER}}",
+  "reviewTitle": "{{REVIEW_TITLE}}",
+  "reviewUrl": "{{REVIEW_URL}}",
+  "outputPath": "{{OUTPUT_PATH}}",
+  "createdAt": "{{CREATED_AT}}"
+}
+</script>
+
+<style>
+  :root {
+    /* High-contrast dark palette (WCAG AA on --bg / --panel) */
+    --bg: #0e1014;
+    --panel: #181b22;
+    --panel-2: #1f232d;
+    --border: #333a47;
+    --text: #eef1f6;        /* primary text — bright */
+    --muted: #aab2c0;        /* secondary — readable, not faint */
+    --faint: #8e97a6;        /* tertiary only, never for body copy */
+    --accent: #8cbcff;
+    --accent-2: #8ff0d0;
+    --attention: #ff8b95;
+    --attention-bg: #341a1f;
+    --medium: #ffd479;
+    --medium-bg: #322a14;
+    --safe: #8ff0d0;
+    --safe-bg: #14302a;
+    --code-bg: #0a0c10;
+    --code-text: #d6dcea;
+    --anno: #d3c4ff;
+    --anno-bg: #221c3a;
+    --anno-border: #4a4078;
+    --add: #8ff0d0;
+    --add-bg: rgba(80, 200, 160, 0.14);
+    --del: #ff9aa3;
+    --del-bg: rgba(255, 120, 130, 0.14);
+    --radius: 10px;
+    font-synthesis: none;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    font-size: 15.5px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 96px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a.src { border-bottom: 1px dashed rgba(140,188,255,.5); }
+  code, pre, .mono { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 5px; font-size: 0.87em; color: #dbe2f0; border: 1px solid #20242e; }
+  h1 { font-size: 25px; margin: 0 0 6px; line-height: 1.25; }
+  h2 { font-size: 19px; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 14.5px; margin: 16px 0 6px; color: var(--text); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin: 16px 0; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13.5px; }
+
+  /* ---------- header ---------- */
+  header.hero { background: linear-gradient(160deg, #1c2230, #13161d); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 26px; }
+  .kicker { color: var(--accent); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+  .lede { margin-top: 10px; max-width: 76ch; color: var(--text); }
+  .subline { color: var(--muted); }
+  .tag { display: inline-block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 8px; font-size: 11.5px; color: var(--muted); margin: 2px 4px 2px 0; font-family: Menlo, monospace; }
+  .stats { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; min-width: 92px; }
+  .stat .n { font-size: 21px; font-weight: 700; }
+  .stat .n.add { color: var(--add); }
+  .stat .n.del { color: var(--del); }
+  .stat .l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+  details.hdr-details { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 10px; }
+  details.hdr-details > summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; display: inline-flex; align-items: center; gap: 7px; }
+  details.hdr-details > summary::-webkit-details-marker { display: none; }
+  details.hdr-details > summary::before { content: "\25B8"; color: var(--faint); transition: transform .15s; }
+  details.hdr-details[open] > summary::before { transform: rotate(90deg); }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 22px; margin-top: 14px; }
+  .meta-item .k { color: var(--muted); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .meta-item .v { color: var(--text); font-size: 13px; word-break: break-word; }
+  .pathline { font-size: 11.5px; color: var(--muted); }
+
+  /* ---------- annotation toggle ---------- */
+  .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 18px 0 2px; }
+  .switch { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; font-size: 13px; background: var(--panel-2); border: 1px solid var(--border); padding: 7px 13px; border-radius: 999px; }
+  .switch input { display: none; }
+  .track { width: 36px; height: 20px; background: #3a4150; border-radius: 999px; position: relative; transition: background .15s; flex: none; }
+  .thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #d3d8e2; transition: transform .15s; }
+  .switch input:checked + .track { background: var(--anno-border); }
+  .switch input:checked + .track .thumb { transform: translateX(16px); background: var(--anno); }
+
+  /* ---------- agent annotations ---------- */
+  .agent-annotation { background: var(--anno-bg); border-left: 3px solid var(--anno-border); border-radius: 0 8px 8px 0; padding: 9px 13px; margin: 9px 0; font-size: 14px; color: #ddd4ff; }
+  .agent-annotation::before { content: "agent"; display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--anno); background: #2e2554; border-radius: 4px; padding: 1px 6px; margin-right: 8px; vertical-align: 1px; }
+  body.hide-anno .agent-annotation { display: none !important; }
+  .inferred { font-style: italic; color: var(--anno); font-size: .85em; font-weight: 600; }
+
+  /* ---------- badges ---------- */
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; vertical-align: middle; }
+  .b-attention { background: var(--attention-bg); color: var(--attention); border: 1px solid #5a2830; }
+  .b-medium { background: var(--medium-bg); color: var(--medium); border: 1px solid #5a4a1c; }
+  .b-safe { background: var(--safe-bg); color: var(--safe); border: 1px solid #1e4a3c; }
+  .b-new { background: var(--safe-bg); color: var(--safe); border: 1px solid #1e4a3c; }
+  .b-mod { background: var(--medium-bg); color: var(--medium); border: 1px solid #5a4a1c; }
+  .b-del { background: var(--attention-bg); color: var(--attention); border: 1px solid #5a2830; }
+  .b-ren { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ---------- reading order (the spine) ---------- */
+  ol.reading { list-style: none; counter-reset: step; padding: 0; margin: 0; }
+  ol.reading > li { counter-increment: step; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px 16px 54px; position: relative; margin-bottom: 12px; }
+  ol.reading > li::before { content: counter(step); position: absolute; left: 14px; top: 16px; width: 28px; height: 28px; background: var(--accent); color: #0b1020; font-weight: 700; border-radius: 50%; display: grid; place-items: center; font-size: 13px; }
+  ol.reading > li.attention { border-left: 3px solid var(--attention); }
+  ol.reading > li.medium { border-left: 3px solid var(--medium); }
+  ol.reading > li.safe { border-left: 3px solid var(--safe); }
+  .step-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .step-cat { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-2); font-weight: 700; }
+  .step-title { font-weight: 600; font-size: 15.5px; margin: 3px 0 6px; color: var(--text); }
+  ul.files { margin: 8px 0 0; padding-left: 0; list-style: none; }
+  ul.files li { font-size: 13px; padding: 2px 0; color: var(--muted); }
+  ul.files li .fp { font-family: Menlo, monospace; font-size: 12.5px; }
+
+  /* ---------- per-file detail incl. full diff ---------- */
+  details.file { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; overflow: hidden; }
+  details.file > summary { cursor: pointer; padding: 11px 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; list-style: none; }
+  details.file > summary::-webkit-details-marker { display: none; }
+  details.file > summary::before { content: "\25B8"; color: var(--muted); transition: transform .15s; flex: none; }
+  details.file[open] > summary::before { transform: rotate(90deg); }
+  details.file > summary .fpath { font-family: Menlo, monospace; font-size: 12.5px; color: #e9eef7; word-break: break-all; }
+  details.file .body { padding: 4px 14px 14px; border-top: 1px solid var(--border); }
+  details.file.attention { border-color: #5a2830; }
+
+  /* ---------- diff rendering ---------- */
+  pre.diff { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 0; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 10px 0 0; color: var(--code-text); }
+  pre.diff .ln { display: block; padding: 0 14px; white-space: pre; }
+  pre.diff .ln.add { background: var(--add-bg); color: #b6f5dd; }
+  pre.diff .ln.del { background: var(--del-bg); color: #ffc2c8; }
+  pre.diff .ln.ctx { color: #aab2c0; }
+  pre.diff .ln.hh  { color: var(--accent); background: rgba(140,188,255,.08); }
+  pre.diff .ln.meta { color: var(--faint); }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 10px 0 0; color: var(--code-text); }
+  pre code { background: none; padding: 0; border: 0; color: var(--code-text); }
+
+  /* ---------- architecture diagram ---------- */
+  .diagram { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 18px; overflow-x: auto; margin-top: 12px; }
+  .flow { display: flex; align-items: stretch; gap: 0; flex-wrap: nowrap; min-width: 640px; }
+  .node { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 12.5px; text-align: center; display: grid; place-items: center; flex: 1; color: var(--text); }
+  .node.hl { border-color: var(--accent-2); background: var(--safe-bg); color: #d6fff0; }
+  .node.new-node { border-color: var(--accent); background: #16223e; }
+  .arrow { display: grid; place-items: center; color: var(--muted); padding: 0 8px; font-size: 18px; flex: none; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .legend .lg-new::before { background: #16223e; border: 1px solid var(--accent); }
+  .legend .lg-hl::before { background: var(--safe-bg); border: 1px solid var(--accent-2); }
+  .legend .lg-exist::before { background: var(--panel-2); border: 1px solid var(--border); }
+
+  /* ---------- design notes ---------- */
+  .notes-group { margin-bottom: 14px; }
+  .notes-group h3 { display: flex; align-items: center; gap: 8px; color: var(--accent-2); }
+  .notes-group ul { margin: 4px 0 0; padding-left: 20px; }
+  .notes-group li { margin: 4px 0; }
+
+  /* ---------- reviewer checklist ---------- */
+  ul.checklist { list-style: none; padding: 0; margin: 0; }
+  ul.checklist li { padding: 7px 0; display: flex; gap: 11px; align-items: flex-start; font-size: 14.5px; }
+  ul.checklist input { margin-top: 4px; width: 17px; height: 17px; accent-color: var(--accent-2); flex: none; cursor: pointer; }
+  ul.checklist label { cursor: pointer; }
+
+  /* ---------- agent-verified (collapsed) ---------- */
+  details.verified { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 24px; margin: 16px 0; }
+  details.verified > summary { cursor: pointer; padding: 16px 0; font-size: 16px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 9px; color: var(--text); }
+  details.verified > summary::-webkit-details-marker { display: none; }
+  details.verified > summary::before { content: "\25B8"; color: var(--muted); transition: transform .15s; }
+  details.verified[open] > summary::before { transform: rotate(90deg); }
+  details.verified .body { padding-bottom: 16px; }
+
+  .note { background: var(--panel-2); border: 1px dashed var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13.5px; color: var(--muted); margin-top: 12px; }
+  .tldr { font-size: 15.5px; }
+  hr.sep { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  @media (max-width: 720px) { .wrap { padding: 16px 12px 80px; } ol.reading > li { padding-left: 48px; } }
+</style>
+</head>
+
+<body class="hide-anno">
+<div class="wrap">
+
+<!-- ============================ HEADER (slim) ============================ -->
+<header class="hero">
+  <div class="kicker">{{REVIEW_KIND_TITLE}} · Human Review Dashboard</div>
+  <h1>{{REVIEW_TITLE}}</h1>
+  <!-- Derive these from REVIEW_KIND (merge_request | pull_request):
+         {{REVIEW_KIND_TITLE}}  = "Merge Request" or "Pull Request"
+         {{REVIEW_KIND_SHORT}}  = "MR" or "PR"
+         {{REVIEW_NUMBER_PREFIX}} = "!" for GitLab MRs, "#" for GitHub PRs
+       The "author/state" clause is optional: fill it from MR/PR metadata (glab/gh) when
+       available, otherwise delete that clause entirely. Drop the <span class="tag"> if there
+       is no ticket/epic.
+       No-review fallback (empty REVIEW_KIND/NUMBER/URL): use kicker "Branch Review · Human
+       Review Dashboard", delete the MR/PR link + number, orient by branch name + head SHA. -->
+  <p class="subline small" style="margin-top:2px">
+    <span class="tag">{{TICKET_OR_EPIC}}</span>
+    <a href="{{REVIEW_URL}}" target="_blank" rel="noopener">{{PLATFORM}} · {{REVIEW_KIND_SHORT}} {{REVIEW_NUMBER_PREFIX}}{{REVIEW_NUMBER}}</a>
+    · author <code>{{AUTHOR}}</code> · state <code>{{STATE}}</code>
+  </p>
+  <p class="lede">{{WHAT_IS_THIS_ABOUT}}</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n">{{FILES_CHANGED}}</div><div class="l">files changed</div></div>
+    <div class="stat"><div class="n add">+{{INSERTIONS}}</div><div class="l">insertions</div></div>
+    <div class="stat"><div class="n del">&minus;{{DELETIONS}}</div><div class="l">deletions</div></div>
+    <!-- REPEAT optional: 1-3 review-relevant counts, e.g. new core files, migrations -->
+    <div class="stat"><div class="n">{{EXTRA_N}}</div><div class="l">{{EXTRA_LABEL}}</div></div>
+  </div>
+
+  <div class="toolbar">
+    <label class="switch">
+      <input type="checkbox" id="anno-toggle">
+      <span class="track"><span class="thumb"></span></span>
+      <span>Show agent annotations</span>
+    </label>
+    <span class="muted small">Facts from git/code/tests stay visible. Interpretation, risk and questions are <span class="inferred">agent</span> overlays.</span>
+  </div>
+
+  <!-- Review-irrelevant metadata lives here, collapsed by default -->
+  <details class="hdr-details" data-key="hdr">
+    <summary>Run details (harness, refs, paths)</summary>
+    <div class="meta-grid">
+      <div class="meta-item"><span class="k">Base ref</span><span class="v mono">{{BASE_REF}} @ <code>{{BASE_SHA_SHORT}}</code></span></div>
+      <div class="meta-item"><span class="k">Head</span><span class="v mono">{{CURRENT_BRANCH}} @ <code>{{HEAD_SHA_SHORT}}</code></span></div>
+      <div class="meta-item"><span class="k">Platform / {{REVIEW_KIND_SHORT}}</span><span class="v">{{PLATFORM}} · {{REVIEW_NUMBER_PREFIX}}{{REVIEW_NUMBER}}</span></div>
+      <div class="meta-item"><span class="k">Harness / Model</span><span class="v">{{HARNESS}} · {{MODEL}}</span></div>
+      <div class="meta-item"><span class="k">Repo path</span><span class="v pathline mono">{{REPO_ROOT}}</span></div>
+      <div class="meta-item"><span class="k">Report path</span><span class="v pathline mono">{{OUTPUT_PATH}}</span></div>
+    </div>
+    <p class="note small"><strong>unknown</strong> in metadata means "not available to the agent runtime."</p>
+  </details>
+</header>
+
+<!-- ============================ TL;DR ============================ -->
+<section>
+  <h2>TL;DR</h2>
+  <p class="tldr">{{TLDR_2_TO_4_SENTENCES}}</p>
+</section>
+
+<!-- ==================== ARCHITECTURE CONTEXT (keep — praised) ==================== -->
+<section>
+  <h2>Architecture Context</h2>
+  <p>{{ARCH_PROSE}}</p>
+  <!-- EXAMPLE diagram — mirror this shape; show before/after, changed flow, or affected boundaries -->
+  <div class="diagram">
+    <div class="flow">
+      <div class="node">{{NODE}}</div>
+      <div class="arrow">&rarr;</div>
+      <div class="node new-node">{{NEW_NODE}}</div>
+      <div class="arrow">&rarr;</div>
+      <div class="node hl">{{RESULT_NODE}}</div>
+    </div>
+  </div>
+  <div class="legend">
+    <span class="lg-exist">existing surface</span>
+    <span class="lg-new">added by this MR</span>
+    <span class="lg-hl">output</span>
+  </div>
+</section>
+
+<!-- ==================== HUMAN READING ORDER (the spine) ==================== -->
+<section>
+  <h2>Human Reading Order</h2>
+  <p class="muted small">Read in this order to understand the change as a designed unit, not alphabetically. Risk is flagged inline; tests and mechanical fallout are summarized at the bottom.</p>
+  <ol class="reading">
+
+    <!-- EXAMPLE STEP — replicate per reading-order step (typically 3-6 steps). -->
+    <!-- Set li class to attention | medium | safe. Drop the badge for plain steps. -->
+    <li class="attention">
+      <div class="step-head">
+        <span class="step-cat">{{CATEGORY e.g. CORE DOMAIN · THE CONTRACT}}</span>
+        <span class="badge b-attention">attention</span>
+      </div>
+      <div class="step-title">{{STEP_TITLE}}</div>
+      <p>{{WHY_START_HERE_AND_WHAT_IT_DOES}}</p>
+      <ul class="files">
+        <!-- REPEAT per file in this step. {{FILE_URL}} = blob link computed per SKILL.md "Source Links":
+             GitLab REPO_WEB_URL/-/blob/HEAD_SHA/PATH · GitHub REPO_WEB_URL/blob/HEAD_SHA/PATH.
+             If REPO_WEB_URL is empty, drop the <a> and render {{FILE_PATH}} as plain text. -->
+        <li>
+          <span class="badge b-new">new</span>
+          <a class="src fp" href="{{FILE_URL}}" target="_blank" rel="noopener">{{FILE_PATH}}</a>
+          — {{ONE_LINE_NOTE}}
+        </li>
+      </ul>
+      <p class="agent-annotation">{{WHAT_THE_REVIEWER_SHOULD_CHECK_HERE}}</p>
+      <!-- Per-file diff detail. Collapsed by default (calm surface). Link the path unless deleted.
+           The <pre class="diff"> content MUST come from scripts/render-diff.sh "$BASE_REF" "<path>"
+           pasted verbatim — never hand-write/abbreviate it. -->
+      <details class="file attention" data-key="diff:{{FILE_PATH}}">
+        <summary><a class="src fpath" href="{{FILE_URL}}" target="_blank" rel="noopener">{{FILE_PATH}}</a> <span class="badge b-new">new</span></summary>
+        <div class="body">
+          <p class="muted small">{{ONE_LINE_WHAT_CHANGED}}</p>
+          {{RENDER_DIFF_OUTPUT_FOR_THIS_FILE}}
+        </div>
+      </details>
+    </li>
+    <!-- /EXAMPLE STEP -->
+
+  </ol>
+</section>
+
+<!-- ==================== DESIGN / ARCHITECTURE NOTES (grouped) ==================== -->
+<section>
+  <h2>Design / Architecture Notes</h2>
+  <!-- Group decisions by theme instead of a flat bullet list. -->
+  <div class="notes-group">
+    <h3>Coupling introduced / removed</h3>
+    <ul><li>{{NOTE}}</li></ul>
+  </div>
+  <div class="notes-group">
+    <h3>Invariants that must still hold</h3>
+    <ul><li>{{NOTE}}</li></ul>
+  </div>
+  <div class="notes-group">
+    <h3>Alternatives apparently not chosen <span class="inferred">inferred</span></h3>
+    <ul><li>{{NOTE}}</li></ul>
+  </div>
+</section>
+
+<!-- ==================== REVIEWER CHECKLIST (persistent) ==================== -->
+<section>
+  <h2>Reviewer Checklist</h2>
+  <ul class="checklist" id="reviewer-checklist">
+    <!-- REPEAT per item. Give each a STABLE data-check id so progress persists across edits. -->
+    <li><input type="checkbox" data-check="arch"><label>{{CHECK_ITEM}}</label></li>
+    <li><input type="checkbox" data-check="risky"><label>{{CHECK_ITEM}}</label></li>
+    <li><input type="checkbox" data-check="contracts"><label>{{CHECK_ITEM}}</label></li>
+    <li><input type="checkbox" data-check="tests"><label>{{CHECK_ITEM}}</label></li>
+  </ul>
+</section>
+
+<!-- ============== AGENT-VERIFIED (tests, mechanical, bumps — collapsed) ============== -->
+<details class="verified" data-key="verified">
+  <summary>Agent-verified &mdash; tests, mechanical fallout, version bumps</summary>
+  <div class="body">
+    <p class="muted small">These are lower-value for a human first pass; an agent can verify them efficiently. Every file here still carries its complete diff (collapsed) for completeness.</p>
+
+    <h3>Tests</h3>
+    <!-- REPEAT per test file. Same rule as everywhere: link the path, and the diff comes
+         from render-diff.sh verbatim — do NOT reduce test files to method-name stubs. -->
+    <details class="file" data-key="diff:{{TEST_PATH}}">
+      <summary><a class="src fpath" href="{{FILE_URL}}" target="_blank" rel="noopener">{{TEST_PATH}}</a> <span class="badge b-new">new</span></summary>
+      <div class="body">
+        <p class="muted small">{{ONE_LINE_WHAT_THE_TESTS_COVER}}</p>
+        {{RENDER_DIFF_OUTPUT_FOR_THIS_FILE}}
+      </div>
+    </details>
+
+    <h3>Mechanical / generated / version bumps</h3>
+    <!-- REPEAT per mechanical file. Link the path; paste render-diff.sh output verbatim
+         (the real csproj/props/changelog diff, never a synthetic "@@ VersionPrefix @@" summary). -->
+    <details class="file" data-key="diff:{{MECH_PATH}}">
+      <summary><a class="src fpath" href="{{FILE_URL}}" target="_blank" rel="noopener">{{MECH_PATH}}</a> <span class="badge b-mod">mod</span></summary>
+      <div class="body">
+        {{RENDER_DIFF_OUTPUT_FOR_THIS_FILE}}
+      </div>
+    </details>
+  </div>
+</details>
+
+<p class="muted small" style="text-align:center; margin-top:24px">
+  Generated by <code>mr-human-review-dashboard</code> · {{HARNESS}} / {{MODEL}} · {{CREATED_AT}} · facts from git, code &amp; tests; interpretation marked as agent annotations.
+</p>
+
+</div>
+
+<script>
+  /* Persistence: annotation toggle + reviewer checklist + collapsible state.
+     Namespaced per review so multiple dashboards never collide in localStorage.
+     KEEP THIS BLOCK VERBATIM. */
+  (function () {
+    var meta = {};
+    try { meta = JSON.parse(document.getElementById("review-metadata").textContent) || {}; } catch (e) {}
+    var NS = "mrhr:" + (meta.reviewUrl || meta.outputPath || location.pathname) + ":";
+    function get(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function set(k,v){ try { localStorage.setItem(k,v); } catch (e) {} }
+
+    // annotation toggle
+    var body = document.body, toggle = document.getElementById("anno-toggle");
+    var TKEY = NS + "show-annotations";
+    function applyAnno(show){ body.classList.toggle("hide-anno", !show); if (toggle) toggle.checked = show; }
+    applyAnno(get(TKEY) === "1");
+    if (toggle) toggle.addEventListener("change", function () {
+      body.classList.toggle("hide-anno", !toggle.checked);
+      set(TKEY, toggle.checked ? "1" : "0");
+    });
+
+    // reviewer checklist
+    var boxes = document.querySelectorAll("#reviewer-checklist input[type=checkbox]");
+    Array.prototype.forEach.call(boxes, function (box, i) {
+      var key = NS + "check:" + (box.getAttribute("data-check") || i);
+      if (get(key) === "1") box.checked = true;
+      box.addEventListener("change", function () { set(key, box.checked ? "1" : "0"); });
+    });
+
+    // collapsible state (any <details data-key>)
+    var dets = document.querySelectorAll("details[data-key]");
+    Array.prototype.forEach.call(dets, function (d) {
+      var key = NS + "open:" + d.getAttribute("data-key");
+      var v = get(key);
+      if (v === "1") d.open = true; else if (v === "0") d.open = false;
+      d.addEventListener("toggle", function () { set(key, d.open ? "1" : "0"); });
+    });
+  })();
+</script>
+</body>
+</html>
