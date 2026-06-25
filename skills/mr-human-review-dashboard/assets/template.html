@@ -188,6 +188,15 @@
   pre.diff .ln.ctx { color: #aab2c0; }
   pre.diff .ln.hh  { color: var(--accent); background: rgba(140,188,255,.08); }
   pre.diff .ln.meta { color: var(--faint); }
+  /* token-level syntax highlighting (applied by the bottom script over add/del/ctx lines) */
+  pre.diff .tk-com { color: #8b96aa; font-style: italic; }
+  pre.diff .tk-str { color: #f2a06a; }
+  pre.diff .tk-num { color: #e6c07b; }
+  pre.diff .tk-kw  { color: #ff8ac0; }
+  pre.diff .tk-typ { color: #82c8ff; }
+  pre.diff .tk-fn  { color: #d2a8ff; }
+  pre.diff .tk-tag { color: #82c8ff; }
+  pre.diff .tk-atn { color: #e6c07b; }
   pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; margin: 10px 0 0; color: var(--code-text); }
   pre code { background: none; padding: 0; border: 0; color: var(--code-text); }
 
@@ -457,6 +466,167 @@
       if (v === "1") d.open = true; else if (v === "0") d.open = false;
       d.addEventListener("toggle", function () { set(key, d.open ? "1" : "0"); });
     });
+  })();
+</script>
+
+<script>
+  /* Syntax highlighting for diff blocks. Self-contained, offline, per-line.
+     Works on each .ln's raw textContent (entities decoded), strips the leading
+     diff marker (+/-/space), tokenizes the rest, and rebuilds innerHTML with
+     escaped token spans. Hunk-header (.hh) and metadata (.meta) lines are left
+     untouched. Language comes from <pre class="diff" data-lang="..."> emitted by
+     render-diff.sh; unknown languages are skipped. KEEP THIS BLOCK VERBATIM. */
+  (function () {
+    function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+    function S(str){ var o={}; str.split(" ").forEach(function (w){ if (w) o[w]=1; }); return o; }
+
+    var KW = {
+      cs: "abstract as async await base bool break byte case catch char checked class const continue decimal default delegate do double dynamic else enum event explicit extern false finally fixed float for foreach get goto if implicit in init int interface internal is lock long nameof namespace new null object operator out override params partial private protected public readonly record ref required return sbyte scoped sealed set short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using value var virtual void volatile when where while with yield",
+      js: "abstract any as async await boolean break case catch class const continue debugger declare default delete do else enum export extends false finally for from function get if implements import in instanceof interface is keyof let namespace never new null number object of package private protected public readonly return set static string super switch symbol this throw true try type typeof undefined unknown var void while with yield",
+      py: "and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield self cls match case",
+      sql: "select from where insert update delete create table alter drop join inner left right outer full cross on as and or not null into values set order by group having limit offset distinct count sum avg min max index primary key foreign references default constraint union all exists in like between is asc desc case when then else end begin commit rollback transaction with returning",
+      sh: "if then else elif fi for while do done case esac function in return local export echo exit set unset readonly shift source alias",
+      go: "break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false",
+      rs: "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while"
+    };
+    var CSTYLE = "abstract assert boolean break byte case catch char class const continue default do double else enum extends extern false final finally float for fun goto if implements import in instanceof int interface internal is let long mut namespace native new null operator override package private protected public readonly return short static struct super switch synchronized this throw throws transient true try typedef typeof union unsigned using val var virtual void volatile when where while";
+
+    var G = {
+      cs:     { lc:"//", block:true, csharp:true, kw:S(KW.cs) },
+      js:     { lc:"//", block:true, tmpl:true,  kw:S(KW.js) },
+      cstyle: { lc:"//", block:true,             kw:S(CSTYLE) },
+      go:     { lc:"//", block:true, tmpl:true,  kw:S(KW.go) },
+      rs:     { lc:"//", block:true,             kw:S(KW.rs) },
+      py:     { lc:"#",  block:false,            kw:S(KW.py) },
+      sql:    { lc:"--", block:true, dq:true, ci:true, kw:S(KW.sql) },
+      sh:     { lc:"#",  block:false,            kw:S(KW.sh) },
+      hash:   { lc:"#",  block:false,            kw:{} },
+      json:   { lc:"//", block:true,             kw:S("true false null") }
+    };
+
+    function langOf(raw){
+      var map = {
+        cs:"cs",
+        ts:"js", tsx:"js", js:"js", jsx:"js", mjs:"js", cjs:"js",
+        java:"cstyle", c:"cstyle", h:"cstyle", cpp:"cstyle", hpp:"cstyle", cc:"cstyle",
+        kt:"cstyle", kts:"cstyle", swift:"cstyle", scala:"cstyle", php:"cstyle",
+        dart:"cstyle", css:"cstyle", scss:"cstyle", less:"cstyle",
+        go:"go", rs:"rs",
+        py:"py", rb:"py",
+        sql:"sql",
+        sh:"sh", bash:"sh", zsh:"sh", ps1:"sh",
+        yaml:"hash", yml:"hash", toml:"hash", ini:"hash", conf:"hash",
+        dockerfile:"hash", makefile:"hash", mk:"hash", tf:"hash", r:"hash", env:"hash", gitignore:"hash",
+        json:"json", jsonc:"json",
+        xml:"xml", csproj:"xml", props:"xml", targets:"xml", html:"xml", htm:"xml",
+        xaml:"xml", config:"xml", svg:"xml", plist:"xml", resx:"xml", nuspec:"xml", axml:"xml"
+      };
+      return map[(raw||"").toLowerCase()] || "none";
+    }
+
+    function span(cls, s){ return '<span class="'+cls+'">'+esc(s)+'</span>'; }
+
+    function hlCode(src, g){
+      var out="", i=0, n=src.length;
+      var numRe = /^(?:0[xXbBoO][0-9a-fA-F_]+|\d[\d_]*\.?[\d_]*(?:[eE][+-]?\d+)?)[fFdDmMlLuU]*/;
+      var idRe  = /^[A-Za-z_$][\w$]*/;
+      while(i<n){
+        var ch=src[i], rest=src.slice(i);
+        if(g.lc && src.substr(i, g.lc.length)===g.lc){ out+=span("tk-com", src.slice(i)); break; }
+        if(g.block && ch==="/" && src[i+1]==="*"){
+          var e=src.indexOf("*/", i+2), end=e<0?n:e+2;
+          out+=span("tk-com", src.slice(i,end)); i=end; continue;
+        }
+        if(g.csharp && ch==="@" && src[i+1]==='"'){
+          var j=i+2;
+          while(j<n){ if(src[j]==='"'){ if(src[j+1]==='"'){ j+=2; continue; } j++; break; } j++; }
+          out+=span("tk-str", src.slice(i,j)); i=j; continue;
+        }
+        if(ch==='"' || ch==="'" || (g.tmpl && ch==="`")){
+          var q=ch, k=i+1;
+          while(k<n){
+            var c=src[k];
+            if(c==="\\"){ k+=2; continue; }
+            if(g.dq && c===q && src[k+1]===q){ k+=2; continue; }
+            if(c===q){ k++; break; }
+            k++;
+          }
+          out+=span("tk-str", src.slice(i,k)); i=k; continue;
+        }
+        if(ch>="0" && ch<="9"){
+          var m=numRe.exec(rest);
+          if(m){ out+=span("tk-num", m[0]); i+=m[0].length; continue; }
+        }
+        var im=idRe.exec(rest);
+        if(im){
+          var word=im[0], cls=null;
+          var isKw = g.ci ? !!g.kw[word.toLowerCase()] : !!g.kw[word];
+          if(isKw) cls="tk-kw";
+          else {
+            var p=i+word.length;
+            while(p<n && (src[p]===" "||src[p]==="\t")) p++;
+            if(src[p]==="(") cls="tk-fn";
+            else if(word.charCodeAt(0)>=65 && word.charCodeAt(0)<=90) cls="tk-typ";
+          }
+          out += cls ? span(cls, word) : esc(word);
+          i += word.length; continue;
+        }
+        out+=esc(ch); i++;
+      }
+      return out;
+    }
+
+    function hlXml(src){
+      var out="", i=0, n=src.length;
+      var nameRe=/^[A-Za-z_][\w.:-]*/, attrRe=/^[A-Za-z_:][\w.:-]*/;
+      while(i<n){
+        if(src.substr(i,4)==="<!--"){ var e=src.indexOf("-->",i+4), end=e<0?n:e+3; out+=span("tk-com",src.slice(i,end)); i=end; continue; }
+        if(src[i]==="<"){
+          var j=i+1, lead="<";
+          if(src[j]==="!"||src[j]==="?"){ var e2=src.indexOf(">",i+1), end2=e2<0?n:e2+1; out+=span("tk-tag",src.slice(i,end2)); i=end2; continue; }
+          if(src[j]==="/"){ lead="</"; j++; }
+          var nm=nameRe.exec(src.slice(j));
+          if(nm){
+            out += esc(lead) + span("tk-tag", nm[0]);
+            i = j + nm[0].length;
+            while(i<n && src[i]!==">"){
+              var c=src[i];
+              if(c==='"'||c==="'"){ var q=c, k=i+1; while(k<n && src[k]!==q) k++; if(k<n) k++; out+=span("tk-str",src.slice(i,k)); i=k; continue; }
+              var an=attrRe.exec(src.slice(i));
+              if(an){ out+=span("tk-atn",an[0]); i+=an[0].length; continue; }
+              out+=esc(c); i++;
+            }
+            if(i<n){ out+=esc(">"); i++; }
+            continue;
+          }
+          out+=esc("<"); i++; continue;
+        }
+        var nx=src.indexOf("<", i);
+        if(nx<0){ out+=esc(src.slice(i)); break; }
+        out+=esc(src.slice(i,nx)); i=nx;
+      }
+      return out;
+    }
+
+    function run(){
+      var pres=document.querySelectorAll("pre.diff[data-lang]");
+      Array.prototype.forEach.call(pres, function (pre){
+        var fam=langOf(pre.getAttribute("data-lang"));
+        if(fam==="none") return;
+        var g=G[fam];
+        Array.prototype.forEach.call(pre.querySelectorAll(".ln"), function (ln){
+          if(ln.classList.contains("meta")||ln.classList.contains("hh")) return;
+          try{
+            var txt=ln.textContent;
+            if(!txt) return;
+            var body=txt.slice(1);
+            ln.innerHTML = esc(txt.charAt(0)) + (fam==="xml" ? hlXml(body) : hlCode(body, g));
+          }catch(_){ /* leave the line untouched on any error */ }
+        });
+      });
+    }
+    if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
   })();
 </script>
 </body>

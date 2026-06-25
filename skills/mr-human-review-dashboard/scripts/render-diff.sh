@@ -31,7 +31,17 @@ FILE=$2
 
 diff_text=$(git diff --find-renames "$BASE_REF"...HEAD -- "$FILE" 2>/dev/null)
 
-printf '<pre class="diff">'
+# Derive a language hint for the dashboard's syntax highlighter from the file name:
+# the lowercased extension, or the lowercased basename when there is no extension
+# (Dockerfile, Makefile, ...). The highlighter maps unknown values to "no highlight".
+base=${FILE##*/}
+case "$base" in
+  *.*) lang=${base##*.} ;;
+  *)   lang=$base ;;
+esac
+lang=$(printf '%s' "$lang" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9')
+
+printf '<pre class="diff" data-lang="%s">' "$lang"
 
 printf "%s\n" "$diff_text" | awk '
 function esc(s) {
