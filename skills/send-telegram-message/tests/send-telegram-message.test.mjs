@@ -106,6 +106,28 @@ test('reports partial delivery without leaking the bot token', async () => {
   );
 });
 
+test('redacts every secret and the message from API failure details', async () => {
+  const token = 'secret-token';
+  const chatId = 'secret-chat';
+  const text = 'private message body';
+  const fetchImpl = async () => new Response(JSON.stringify({
+    ok: false,
+    description: `Rejected ${token} for ${chatId}: ${text}`,
+  }), {
+    status: 400,
+    headers: { 'content-type': 'application/json' },
+  });
+
+  await assert.rejects(
+    sendTelegramMessage({ token, chatId, text, fetchImpl }),
+    (error) => {
+      assert.doesNotMatch(error.message, /secret-token|secret-chat|private message body/);
+      assert.match(error.message, /\[REDACTED\]/);
+      return true;
+    },
+  );
+});
+
 test('rejects empty messages before making a request', async () => {
   let requested = false;
   await assert.rejects(

@@ -2,6 +2,8 @@
 
 import { pathToFileURL } from 'node:url';
 
+import { loadTelegramCredentials } from './telegram-config.mjs';
+
 const TELEGRAM_API_BASE = 'https://api.telegram.org/bot';
 const TELEGRAM_CHUNK_SIZE = 4000;
 
@@ -114,9 +116,9 @@ export async function sendTelegramMessage({
       messageIds.push(messageId);
       sentChunks += 1;
     } catch (error) {
-      const safeMessage = redactSecret(
+      const safeMessage = redactSecrets(
         error instanceof Error ? error.message : String(error),
-        normalizedToken,
+        [normalizedToken, normalizedChatId, text, chunk],
       );
       throw new TelegramDeliveryError(`Telegram delivery failed: ${safeMessage}`, {
         sentChunks,
@@ -137,8 +139,10 @@ async function readTelegramPayload(response) {
   }
 }
 
-function redactSecret(value, secret) {
-  return secret ? value.replaceAll(secret, '[REDACTED]') : value;
+function redactSecrets(value, secrets) {
+  return [...new Set(secrets.filter(Boolean))]
+    .sort((left, right) => right.length - left.length)
+    .reduce((redacted, secret) => redacted.replaceAll(secret, '[REDACTED]'), value);
 }
 
 async function readStdin() {
@@ -154,9 +158,10 @@ async function main() {
   const text = stripFramingLineEnding(await readStdin());
 
   try {
+    const credentials = await loadTelegramCredentials();
     const result = await sendTelegramMessage({
-      token: process.env.TELEGRAM_BOT_TOKEN,
-      chatId: process.env.OWNER_CHAT_ID,
+      token: credentials.token,
+      chatId: credentials.chatId,
       text,
     });
     process.stdout.write(`${JSON.stringify({ event: 'telegram_message_sent', ...result })}\n`);
