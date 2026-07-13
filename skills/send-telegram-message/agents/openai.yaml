@@ -1,0 +1,4 @@
+interface:
+  display_name: "Send Telegram Message"
+  short_description: "Send messages through your Telegram bot"
+  default_prompt: "Use $send-telegram-message to send this message to me via Telegram."
