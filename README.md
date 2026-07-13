@@ -6,11 +6,18 @@ A public collection of tool-neutral agent skills.
 
 | Skill | Purpose |
 | --- | --- |
+| [`guard-codex-usage`](skills/guard-codex-usage/SKILL.md) | Protects shared Codex capacity with configurable absolute and pace gates. |
 | [`mr-human-review-dashboard`](skills/mr-human-review-dashboard/SKILL.md) | Generates a self-contained HTML dashboard that explains a merge request or pull request for human reviewers. |
 | [`orchestrate-codex-tasks`](skills/orchestrate-codex-tasks/SKILL.md) | Delegates bounded work to visible Codex tasks, tracks durable workers, and consolidates verified results in the main task. |
 | [`send-telegram-message`](skills/send-telegram-message/SKILL.md) | Sends an exact plaintext message through a Telegram bot configured with environment variables. |
 
 ## Installation
+
+The `guard-codex-usage` skill requires the [CodexBar CLI](https://github.com/steipete/CodexBar/blob/main/docs/cli.md) to be installed and available as `codexbar` on `PATH`. Follow the upstream installation instructions, then verify the prerequisite before using the guard:
+
+```bash
+codexbar usage --provider codex --format json --pretty
+```
 
 Clone this repository and copy the skill folder into the skill directory used by your agent harness:
 
@@ -47,6 +54,13 @@ When a PR or MR number is available, filenames include `pr-<number>-...` for Git
 
 ```text
 skills/
+  guard-codex-usage/
+    SKILL.md
+    agents/openai.yaml
+    references/configuration.md
+    scripts/check_usage.py
+    scripts/test_usage_guard.py
+    scripts/usage_guard_hook.py
   mr-human-review-dashboard/
     SKILL.md
     agents/openai.yaml

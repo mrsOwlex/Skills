@@ -1,0 +1,4 @@
+interface:
+  display_name: "Guard Codex Usage"
+  short_description: "Protect shared Codex capacity with configurable gates"
+  default_prompt: "Use $guard-codex-usage to check whether this expensive Codex phase can safely start."
