@@ -101,6 +101,10 @@ After creation:
 7. Treat silence, a running state, and a completion report as different states. Do not infer success from inactivity.
 8. When workers remain active after useful foreground work is exhausted, create or replace one task-attached heartbeat/wakeup for the main task. Its prompt must re-read the tracked workers, continue supervision, and remove or disable the wakeup after all required workers reach terminal states. Inspect the saved wakeup to verify it targets this main task. Do not busy-wait or create duplicate wakeups.
 
+Assume substantial workers may run for minutes or hours. For an unchanged running worker, schedule the next status check about 15 minutes later by default. Use a shorter interval only when recent evidence indicates an imminent transition or the main task must promptly unblock the worker. Lengthen the interval, for example to 30–60 minutes, when the worker reports a long build, test, migration, or other hours-long phase. After every check, choose the next interval from the latest evidence rather than polling on a fixed tight loop.
+
+When the next useful check is minutes away, prefer a task-attached wakeup over keeping the current turn blocked with a foreground sleep. The wakeup prompt must preserve the orchestration run ID, tracked worker IDs, current states, and the next supervision action so the main task can resume deterministically.
+
 When thread creation returns only a client-thread identifier while a worktree is being prepared, retain it but do not treat it as a usable thread ID. Search recent threads using the unique run and work-package markers after setup has had time to progress. Accept a match only when exactly one thread contains both markers and its initial assignment matches the tracked work package. If correlation is unavailable or ambiguous, stop steering that worker, report it as untrackable, and never accept its result as verified. Prefer a dedicated client-ID status or resolution capability whenever the host provides one.
 
 ## Collect, review, and integrate
