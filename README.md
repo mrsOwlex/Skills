@@ -7,6 +7,8 @@ A public collection of tool-neutral agent skills.
 | Skill | Purpose |
 | --- | --- |
 | [`mr-human-review-dashboard`](skills/mr-human-review-dashboard/SKILL.md) | Generates a self-contained HTML dashboard that explains a merge request or pull request for human reviewers. |
+| [`orchestrate-codex-tasks`](skills/orchestrate-codex-tasks/SKILL.md) | Delegates bounded work to visible Codex tasks, supervises them, and consolidates verified results in the main task. |
+| [`send-telegram-message`](skills/send-telegram-message/SKILL.md) | Sends an exact plaintext message through a Telegram bot configured with environment variables. |
 
 ## Installation
 
@@ -22,6 +24,14 @@ Then invoke the skill explicitly:
 ```text
 Use $mr-human-review-dashboard to create a self-contained HTML review dashboard for the current merge request.
 ```
+
+For local development, a skill can instead be linked into Codex so repository changes are immediately available:
+
+```bash
+ln -s /absolute/path/to/Skills/skills/send-telegram-message ~/.codex/skills/send-telegram-message
+```
+
+The Telegram skill expects Node.js 18 or newer and the same `TELEGRAM_BOT_TOKEN` and `OWNER_CHAT_ID` environment variables used by the Agents project. It can load the Agents project's existing `.env` through that project's `dotenv` dependency; credentials are never stored in this repository.
 
 ## Output Location
 
@@ -42,6 +52,15 @@ skills/
     agents/openai.yaml
     assets/template.html
     scripts/prepare-review-output.sh
+  orchestrate-codex-tasks/
+    SKILL.md
+    agents/openai.yaml
+  send-telegram-message/
+    SKILL.md
+    agents/openai.yaml
+    scripts/send-telegram-message.mjs
+    tests/mock-fetch.mjs
+    tests/send-telegram-message.test.mjs
 ```
 
 Each skill folder is kept focused on agent-facing instructions and optional bundled resources. Human-facing project documentation lives at the repository root.

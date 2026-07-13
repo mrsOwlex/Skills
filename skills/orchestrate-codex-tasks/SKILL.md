@@ -1,0 +1,126 @@
+---
+name: orchestrate-codex-tasks
+description: Orchestrate substantial work across separate, user-visible Codex tasks and consolidate their verified results in the calling main task. Use when the user explicitly asks to create, delegate to, coordinate, parallelize across, supervise, or collect results from visible Codex tasks or background Codex threads. Do not trigger for ordinary implementation, conceptual questions about tasks, or internal subagent delegation.
+---
+
+# Orchestrate Codex Tasks
+
+Coordinate visible Codex tasks as durable workers. Keep the calling task responsible for decomposition, supervision, integration, and the final claim of success.
+
+## Required capabilities
+
+Locate the Codex app tools for these capabilities, loading or searching for them when they are not already callable:
+
+- list projects
+- create a thread
+- list and read threads
+- send a message to a thread
+- optionally rename, hand off, archive, or navigate to a thread
+
+Current tool names commonly end in `list_projects`, `create_thread`, `list_threads`, `read_thread`, `send_message_to_thread`, `set_thread_title`, and `handoff_thread`. Match by capability instead of assuming a fixed namespace.
+
+If project or thread tools are unavailable, report that visible-task orchestration is unavailable in the current surface. Do not silently replace visible tasks with internal subagents.
+
+## Orchestration contract
+
+1. Confirm that the user explicitly requested visible or background Codex tasks. Invoking this skill explicitly counts as authorization to create them.
+2. Inspect the current request, repository instructions, working tree, and relevant project documentation before delegating.
+3. Define the overall acceptance criteria and verification plan in the main task.
+4. Split work only where each worker has a bounded outcome, enough context to proceed independently, and an objectively reviewable result.
+5. Keep work in the main task when coordination would cost more than it saves. Avoid duplicate ownership and overlapping writes.
+6. Record each created thread ID, title, assignment, environment, dependencies, and expected evidence in the main task's working state.
+7. Supervise workers until each is successful, blocked, failed, or explicitly cancelled. A created thread is not a completed delegation.
+8. Verify and integrate worker results in the main task. Never forward a worker's success claim without checking its evidence.
+
+## Choose the project and environment
+
+Call the project-list capability before creating project-scoped tasks. Match the current repository or user-named project using its saved path and project metadata; do not guess a project ID.
+
+Use a project target whenever work belongs to an existing local or remote Codex project. Use a projectless target only for genuinely project-independent work.
+
+For a project task:
+
+- Prefer a worktree for parallel code changes in a Git repository.
+- Prefer local for read-only work, non-Git projects, or work that must intentionally share the current checkout.
+- Start a worktree from the project's default branch unless the task explicitly depends on another existing branch or on current uncommitted changes.
+- Use a working-tree starting state only when including current uncommitted state is necessary and intentional.
+- Assign overlapping code changes sequentially or redesign the split; separate worktrees do not remove merge conflicts.
+
+Do not override the model or reasoning effort unless the user requested it. Let each task use the configured default otherwise.
+
+## Write self-contained worker prompts
+
+Give every worker a prompt containing:
+
+- its role and one concrete deliverable;
+- project/repository scope and relevant paths;
+- acceptance criteria and explicit non-goals;
+- applicable instructions, including the requirement to discover and obey `AGENTS.md` files;
+- dependencies on other workers or a statement that there are none;
+- required tests, review, documentation, and observability expectations;
+- ownership boundaries for files or subsystems;
+- the completion report format below;
+- the calling main thread ID when it is known reliably.
+
+Do not assume a new task inherits the calling task's conversation. Include all task-local context it needs, but refer it to repository files instead of copying large documents.
+
+Append this completion contract to each worker prompt:
+
+```text
+Work autonomously until the assigned outcome is complete or genuinely blocked. Do not broaden scope.
+
+Before finishing, verify the result. Your final report must contain:
+STATUS: SUCCESS | BLOCKED | FAILED
+SUMMARY: concise outcome
+CHANGES: files, commits, branches, or artifacts produced
+VERIFICATION: exact commands/checks and results
+RISKS: remaining concerns or "none"
+NEXT: integration instructions or the precise blocker
+
+If a MAIN_THREAD_ID was provided and the Codex thread messaging capability is available, send this same report to that thread exactly once before finishing. Otherwise, finish normally; the main task will retrieve your report. Do not claim SUCCESS when required verification failed or was skipped.
+```
+
+If the main thread ID cannot be established reliably, omit it. Never invent an ID. Pull-based collection with `read_thread` is the required fallback and still satisfies the reporting contract.
+
+## Dispatch and track
+
+Create no more workers than there are genuinely independent work packages. Create them in parallel only when their dependencies and write scopes permit it.
+
+After creation:
+
+1. Save the returned thread or client-thread identifier.
+2. Give the task a short outcome-based title when renaming is available.
+3. Tell the user which visible tasks were created and what each owns.
+4. Continue useful main-task work while workers run.
+5. Read each task after it has had a reasonable opportunity to progress. Avoid tight polling and repeated unchanged status messages.
+6. When a report is incomplete, contradictory, or blocked by an issue the main task can resolve, send one precise follow-up prompt and re-check later.
+7. Treat silence, a running state, and a completion report as different states. Do not infer success from inactivity.
+
+When thread creation returns a client-thread identifier while a worktree is being prepared, retain it and resolve the final thread through the available thread-list/read capabilities before steering the worker.
+
+## Collect, review, and integrate
+
+For every worker marked `SUCCESS`:
+
+1. Read its final report and relevant recent turns.
+2. Inspect the referenced diff, files, artifact, commit, branch, or test output.
+3. Check that the result meets the assigned acceptance criteria and does not conflict with another worker's changes.
+4. Run integration-level verification in the authoritative destination when changes from multiple tasks interact.
+5. Request a correction in the same worker task when its assignment remains valid; create a replacement task only when necessary.
+
+Use handoff only when moving a worker's task and Git state between its worktree and local checkout is necessary for inspection or integration. A handoff may interrupt a running worker, so wait for a stable completion point first.
+
+Do not archive worker tasks unless the user requested cleanup or the workflow explicitly calls for it. Visible history is part of the value of this skill.
+
+## Finish in the main task
+
+Report completion only after the main task has consolidated and verified the outcome. Include:
+
+- the overall result;
+- each worker task and final status;
+- what was integrated or accepted;
+- verification performed by the main task;
+- unresolved blockers or accepted risks;
+- links or app directives for created tasks when the host requires them.
+
+If any required worker remains blocked or failed, state that the orchestration is incomplete and identify the smallest next action. Do not turn partial worker completion into overall success.

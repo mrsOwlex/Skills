@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orchestrate Codex Tasks"
+  short_description: "Coordinate work across visible Codex tasks"
+  default_prompt: "Use $orchestrate-codex-tasks to delegate this work across visible Codex tasks and consolidate the verified result."
