@@ -10,6 +10,7 @@ A public collection of tool-neutral agent skills.
 | [`mr-human-review-dashboard`](skills/mr-human-review-dashboard/SKILL.md) | Generates a self-contained HTML dashboard that explains a merge request or pull request for human reviewers. |
 | [`orchestrate-codex-tasks`](skills/orchestrate-codex-tasks/SKILL.md) | Delegates bounded work to visible Codex tasks, tracks durable workers, and consolidates verified results in the main task. |
 | [`send-telegram-message`](skills/send-telegram-message/SKILL.md) | Sends an exact plaintext message through a Telegram bot configured with environment variables. |
+| [`agent-browser-cleanup`](skills/agent-browser-cleanup/SKILL.md) | Closes local `agent-browser` sessions and verifies that its daemon is gone. |
 
 ## Installation
 
@@ -37,6 +38,14 @@ For local development, a skill can instead be linked into Codex so repository ch
 ```bash
 ln -s /absolute/path/to/Skills/skills/send-telegram-message ~/.codex/skills/send-telegram-message
 ```
+
+The `agent-browser-cleanup` skill is designed for implicit global invocation whenever an agent uses the `agent-browser` CLI. Link it into the global Codex skill directory:
+
+```bash
+ln -s /absolute/path/to/Skills/skills/agent-browser-cleanup ~/.codex/skills/agent-browser-cleanup
+```
+
+It requires a unique non-default `AGENT_BROWSER_NAMESPACE`, verifies that sessions belong to locally launched agent-browser instances, waits for an empty session list and an inactive daemon, and never uses process-wide Chrome termination. Namespace ownership is an explicit per-task contract; do not reuse a namespace between agents.
 
 The Telegram skill expects Node.js 18 or newer. It reads `TELEGRAM_BOT_TOKEN` and `OWNER_CHAT_ID` from the process environment or from the private user-level file `${XDG_CONFIG_HOME:-$HOME/.config}/codex/send-telegram-message.env`. The bundled configurator creates that file with mode `0600`; credentials are never stored in this repository, and the skill has no workspace-path or package dependency.
 
@@ -66,6 +75,11 @@ skills/
     agents/openai.yaml
     assets/template.html
     scripts/prepare-review-output.sh
+  agent-browser-cleanup/
+    SKILL.md
+    agents/openai.yaml
+    scripts/cleanup_agent_browser.py
+    scripts/test_cleanup_agent_browser.py
   orchestrate-codex-tasks/
     SKILL.md
     agents/openai.yaml

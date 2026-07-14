@@ -1,0 +1,7 @@
+interface:
+  display_name: "Agent Browser Cleanup"
+  short_description: "Close agent-browser sessions and verify cleanup"
+  default_prompt: "Use $agent-browser-cleanup after browser automation to close agent-browser sessions and verify that no agent browser remains."
+
+policy:
+  allow_implicit_invocation: true
